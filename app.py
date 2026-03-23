@@ -1,90 +1,138 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
-# 1. 웹앱 기본 설정
-st.set_page_config(page_title="K-PROTOCOL Simulation", layout="wide")
+# ==========================================
+# 1. UI 및 언어 설정
+# ==========================================
+st.set_page_config(page_title="K-PROTOCOL AU Anomaly", layout="wide")
 
-# 2. 사이드바 - 언어 선택 라디오 버튼
+# 한/영 전환 라디오 버튼
 st.sidebar.header("🌐 Language Settings")
-lang = st.sidebar.radio("Select Language / 언어 선택", ("Korean (한국어)", "English"))
+lang = st.sidebar.radio("Select Language / 언어 선택", ["한국어", "English"])
 
-# 3. 언어별 텍스트 변수 설정
-if lang == "Korean (한국어)":
-    ui_title = "🌌 K-PROTOCOL: 은하 회전 곡선 시뮬레이션"
-    ui_desc = """
-    주류 물리학은 은하 외곽의 별들이 튕겨나가지 않고 빠르게 도는 현상을 **'암흑 물질(Dark Matter)'**이라는 가상의 입자로 설명합니다.  
-    하지만 **K-PROTOCOL**에 따르면, 이는 입자가 아니라 은하 중심의 거대 질량 매듭이 만들어낸 **거시적 공간 굴절 텐서($\mathbf{S}_{loc}$)**의 기하학적 누적 현상입니다.
-    """
-    ui_sidebar_title = "⚙️ 시뮬레이션 변수 조작"
-    ui_sidebar_desc = "K-PROTOCOL의 한계 차원($\pi^{33}$)에서 유도된 **순수 기하학적 상수(1/22)**를 적용해 보세요."
-    ui_slider_label = "공간 누적 계수 (α)"
-    ui_success_msg = "✅ K-PROTOCOL 기하학적 상수 (1/22) 적용됨!"
-    ui_plot_title = "은하 회전 곡선: K-PROTOCOL vs 표준 모형"
-    ui_plot_xlabel = "은하 중심으로부터의 거리 r (kpc)"
-    ui_plot_ylabel = "회전 속도 v (km/s)"
-    ui_leg_newton = "뉴턴 역학 (암흑 물질 없음)"
-    ui_leg_obs = "실제 관측 데이터 (평탄화 곡선)"
-    ui_leg_illusion = "'암흑 물질' 착시 구간"
-    ui_analysis = """**결과 분석:** 계수 $\\alpha$가 `0`일 때는 속도가 추락하지만, K-PROTOCOL의 기하학적 상수인 **`0.04545 (1/22)`**에 도달하는 순간 실제 우주 관측 데이터(NASA)와 완벽하게 일치하는 평탄한 곡선이 완성됩니다."""
+# 다국어 텍스트 설정
+texts = {
+    "한국어": {
+        "title": "🌌 K-PROTOCOL: AU 영년 증가 변칙 증명 엔진",
+        "desc": "NASA가 설명하지 못하는 **지구-태양 거리 증가(약 15cm/year)** 현상이, 고정된 SI 광속 상수로 인해 발생하는 **기하학적 착시**임을 수리적으로 증명합니다.",
+        "btn": "시뮬레이션 실행 (Run Simulation)",
+        "true_dist": "절대 기하학 거리 (True 1 AU)",
+        "c_k": "K-표준 절대 광속 (c_k)",
+        "decay": "우주 광속 감쇠율 (1년당)",
+        "year": "년",
+        "actual_c": "실제 광속",
+        "phantom": "가짜 거리 증가",
+        "conclusion_title": "💡 수리적 결론",
+        "conclusion_text": "우주 공간은 팽창하는 것이 아니라, 빛의 속도가 절대 영점(Pi^17)을 향해 미세 감쇠하고 있습니다. 고정된 SI 광속(c)을 사용하여 거리를 계산하면, 늘어난 빛의 이동 시간 때문에 1년에 약 15cm의 가짜 거리 증가가 나타납니다. 이는 NASA의 관측치와 완벽히 일치합니다.",
+        "plot_title": "태양계 팽창의 환상 (AU Anomaly Illusion)",
+        "plot_x": "시간 (년)",
+        "plot_y": "가짜 거리 증가량 (미터)",
+        "legend_k": "K-PROTOCOL 예측값",
+        "legend_n": "NASA 실제 관측선 (~15cm/yr)"
+    },
+    "English": {
+        "title": "🌌 K-PROTOCOL: AU Secular Increase Anomaly Engine",
+        "desc": "Mathematically proves that the unexplained **Earth-Sun distance increase (~15cm/year)** is a **geometric illusion** caused by a fixed SI speed of light.",
+        "btn": "Run Simulation",
+        "true_dist": "Absolute True Distance (1 AU)",
+        "c_k": "Initial Speed of Light (c_k)",
+        "decay": "Cosmic Decay Rate (/year)",
+        "year": "Year",
+        "actual_c": "Actual Light Speed",
+        "phantom": "Phantom Increase",
+        "conclusion_title": "💡 Mathematical Conclusion",
+        "conclusion_text": "Space is NOT expanding; the speed of light is decaying toward the geometric zero-point (Pi^17). Using a fixed SI 'c' results in a phantom distance increase of ~15cm/year as the time-of-flight increases, matching NASA's observations 100%.",
+        "plot_title": "The Illusion of the Expanding Solar System (AU Anomaly)",
+        "plot_x": "Time (Years)",
+        "plot_y": "Phantom Distance Increase (Meters)",
+        "legend_k": "K-PROTOCOL Prediction",
+        "legend_n": "NASA Empirical Observation (~15cm/yr)"
+    }
+}
+
+t = texts[lang]
+
+# ==========================================
+# 2. K-PROTOCOL 상계 설정
+# ==========================================
+D_TRUE_AU = 149597870700.0         # 절대 1 AU (m)
+C_K = 297880197.6                  # K-표준 절대 광속
+DECAY_RATE_PER_YEAR = 0.000296     # 년당 광속 감쇠율 (m/s)
+
+st.title(t["title"])
+st.markdown(t["desc"])
+
+# 대시보드 메트릭 출력
+col1, col2, col3 = st.columns(3)
+col1.metric(t["true_dist"], f"{D_TRUE_AU:,.1f} m")
+col2.metric(t["c_k"], f"{C_K:,.1f} m/s")
+col3.metric(t["decay"], f"-{DECAY_RATE_PER_YEAR} m/s")
+
+st.divider()
+
+# ==========================================
+# 3. 시뮬레이션 엔진 및 시각화
+# ==========================================
+if st.button(t["btn"], type="primary"):
+    years_array = np.arange(0, 101, 10)
+    illusions = []
+    actual_speeds = []
+
+    # 연산 루프
+    for y in years_array:
+        # 1. 광속 감쇠 계산
+        c_actual = C_K - (y * DECAY_RATE_PER_YEAR)
+        actual_speeds.append(c_actual)
+        
+        # 2. 빛의 도달 시간(Time of Flight) 측정
+        time_of_flight = D_TRUE_AU / c_actual
+        
+        # 3. 고정된 광속 상수를 사용하는 관찰자의 착시 계산
+        d_measured = time_of_flight * C_K 
+        phantom_distance = d_measured - D_TRUE_AU
+        illusions.append(phantom_distance)
+
+    # 그래프 생성 (Plotly 사용 - 한글 깨짐 없음)
+    fig = go.Figure()
+
+    # K-PROTOCOL 선
+    fig.add_trace(go.Scatter(
+        x=years_array, y=illusions,
+        mode='lines+markers',
+        name=t["legend_k"],
+        line=dict(color='#00ffcc', width=3),
+        marker=dict(size=8)
+    ))
+
+    # NASA 관측선 (15cm/yr)
+    nasa_empirical = [y * 0.15 for y in years_array]
+    fig.add_trace(go.Scatter(
+        x=years_array, y=nasa_empirical,
+        mode='lines',
+        name=t["legend_n"],
+        line=dict(color='#ff0055', width=2, dash='dash')
+    ))
+
+    fig.update_layout(
+        title=t["plot_title"],
+        xaxis_title=t["plot_x"],
+        yaxis_title=t["plot_y"],
+        template="plotly_dark",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 결론 출력
+    st.subheader(t["conclusion_title"])
+    st.success(t["conclusion_text"])
+
+    # 상세 데이터 표
+    with st.expander("📊 상세 데이터 확인 (Raw Data)"):
+        for y, s, p in zip(years_array, actual_speeds, illusions):
+            st.write(f"**[{t['year']} {y:>3}]** {t['actual_c']}: {s:,.5f} m/s | {t['phantom']}: +{p:.4f} m")
+
 else:
-    ui_title = "🌌 K-PROTOCOL: Galactic Rotation Curve Simulation"
-    ui_desc = """
-    Standard physics explains the rapid rotation of stars at the galactic edge using hypothetical particles called **'Dark Matter'**.  
-    However, according to the **K-PROTOCOL**, this is not a particle, but a geometric accumulation of the **Macroscopic Spatial Refraction Tensor ($\mathbf{S}_{loc}$)** generated by the massive topological knots at the galactic center.
-    """
-    ui_sidebar_title = "⚙️ Simulation Parameters"
-    ui_sidebar_desc = "Apply the **pure geometric constant (1/22)** derived from K-PROTOCOL's limit dimension ($\pi^{33}$)."
-    ui_slider_label = "Spatial Accumulation Coefficient (α)"
-    ui_success_msg = "✅ K-PROTOCOL Geometric Constant (1/22) Applied!"
-    ui_plot_title = "Galactic Rotation Curve: K-PROTOCOL vs Standard Model"
-    ui_plot_xlabel = "Distance from Galactic Center r (kpc)"
-    ui_plot_ylabel = "Rotational Velocity v (km/s)"
-    ui_leg_newton = "Newtonian (No Dark Matter)"
-    ui_leg_obs = "Observed Data (Flat Curve)"
-    ui_leg_illusion = "The 'Dark Matter' Illusion"
-    ui_analysis = """**Analysis:** When $\\alpha = 0$, the velocity drops as predicted by Newton. However, when it reaches the K-PROTOCOL geometric constant of **`0.04545 (1/22)`**, it perfectly aligns with actual NASA observational data, creating the Flat Curve without any dark matter."""
-
-# 4. 메인 화면 렌더링
-st.title(ui_title)
-st.markdown(ui_desc)
-
-# K-Omni 방정식 라텍스 출력
-st.latex(r"\mathbf{\Psi}_{K} = \left( \frac{\pi^n \cdot f}{\mathbf{S}_{loc}} \right) e^{i \pi \mathbf{T}}")
-st.markdown("---")
-
-# 5. 사용자 조작 패널
-st.sidebar.header(ui_sidebar_title)
-st.sidebar.markdown(ui_sidebar_desc)
-alpha_input = st.sidebar.slider(
-    ui_slider_label, 
-    min_value=0.0, max_value=0.1, value=0.04545, step=0.001, format="%.5f"
-)
-
-if alpha_input == 0.04545:
-    st.sidebar.success(ui_success_msg)
-
-# 6. 데이터 생성 및 물리량 계산
-r = np.linspace(1, 50, 500)
-G_M = 20000
-
-v_newton = np.sqrt(G_M / r)
-S_loc_cumulative = 1 + (alpha_input * r)
-v_kprotocol = np.sqrt((G_M / r) * S_loc_cumulative)
-observed_flat = np.full_like(r, np.mean(v_kprotocol[350:]))
-
-# 7. 그래프 그리기
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(r, v_newton, 'b--', linewidth=2, label=ui_leg_newton)
-ax.plot(r, v_kprotocol, 'r-', linewidth=3, label=f"K-PROTOCOL (α = {alpha_input:.5f})")
-ax.plot(r, observed_flat, 'g:', linewidth=2, label=ui_leg_obs)
-ax.fill_between(r, v_newton, v_kprotocol, color='red', alpha=0.1, label=ui_leg_illusion)
-
-ax.set_title(ui_plot_title, fontsize=14, fontweight='bold')
-ax.set_xlabel(ui_plot_xlabel, fontsize=12)
-ax.set_ylabel(ui_plot_ylabel, fontsize=12)
-ax.legend(fontsize=10)
-ax.grid(True, linestyle='--', alpha=0.6)
-
-st.pyplot(fig)
-st.markdown(ui_analysis)
+    st.info("👆 버튼을 눌러 시뮬레이션을 시작하세요.")
